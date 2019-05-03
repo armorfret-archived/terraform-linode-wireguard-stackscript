@@ -28,7 +28,20 @@ pip3 install ansible
 log 'cloning repo'
 git clone "$DEPLOY_REPO" /opt/deploy
 
-exit
+log 'writing user config'
+echo "users:" > /opt/deploy/users.cfg
+for user in $(echo "$USERS" | sed 's/,/ /g'); do
+    echo "- $user" >> /opt/deploy/users.cfg
+done
 
-ansible-playbook --extra-vars=ansible_python_interpreter=/usr/bin/python3 /opt/deploy/linode/setup.yml
-ansible-playbook --extra-vars=ansible_python_interpreter=/usr/bin/python3 /opt/deploy/main.yml
+for playbook in linode/setup.yml main.yml ; do
+    log "running $playbook"
+    ansible-playbook \
+        --inventory localhost, \
+        --connection local \
+        --extra-vars=user_config_file=/opt/deploy/users.cfg \
+        --extra-vars=ansible_python_interpreter=/usr/bin/python3 \
+        "/opt/deploy/$playbook"
+done
+
+log 'completed'
