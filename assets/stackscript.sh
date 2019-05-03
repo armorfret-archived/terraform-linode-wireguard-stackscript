@@ -4,11 +4,28 @@
 
 set -euo pipefail
 
+function log() {
+    local msg="$(date '+%Y-%m-%d_%H:%M:%S') -- $1"
+    echo "$msg" | tee -a /root/log
+}
+
+log 'starting'
+
+export DEBIAN_FRONTEND=noninteractive
+
+log 'updating'
 apt update
+
+log 'upgrading'
 apt upgrade -y
+
+log 'installing deps'
 apt install -y python3-pip python3-dev build-essential git vim-nox
+
+log 'installing ansible'
 pip3 install ansible
 
+log 'cloning repo'
 git clone "$DEPLOY_REPO" /opt/deploy
 
 exit
