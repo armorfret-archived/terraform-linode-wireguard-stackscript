@@ -10,7 +10,6 @@ Terraform module that creates a [Linode](https://linode.com) Stackscript to depl
 ```
 module "stackscript" {
   source  = "github.com/armorfret/terraform-linode-wireguard-stackscript"
-  image_ids = ["private/1234", "private/3456"]
 }
 ```
 
