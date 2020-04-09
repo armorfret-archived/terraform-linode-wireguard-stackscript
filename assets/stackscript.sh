@@ -46,6 +46,32 @@ for user in $(echo "$USERS" | sed 's/,/ /g'); do
     systemctl enable "wireguard-container@${user}.service"
 done
 
+log 'set up automatic upgrades'
+
+echo <<EOF >/etc/systemd/system/upgrade.timer
+[Unit]
+Description=Schedule system upgrades
+
+[Timer]
+OnCalendar=weekly
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+echo <<EOF >/etc/systemd/system/upgrade.service
+[Unit]
+Description=Run system upgrades
+
+[Service]
+Type=oneshot
+ExecStart=pacman -Syu
+ExecStartPost=reboot
+EOF
+
+systemctl enable upgrade.timer
+
 log 'disabling sshd'
 # TODO: disable sshd
 # systemctl disable sshd
