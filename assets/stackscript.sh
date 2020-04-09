@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # <UDF name="users" Label="User list (comma-delimited)" default="one,two,three,four" />
-# <UDF name="deploy_repo" Label="Ansible deploy repo" default="https://github.com/akerl/deploy-wireguard-server" />
+# <UDF name="docker_image" Label="Wireguard docker image" default="docker.pkg.github.com/dock0/wireguard/wireguard:latest" />
 
 set -euo pipefail
 
@@ -11,37 +11,41 @@ function log() {
 
 log 'starting'
 
-export DEBIAN_FRONTEND=noninteractive
+log 'system initial cleanup'
+resize2fs /dev/sda
+rm -f /etc/ssh/ssh_host*
+ssh-keygen -A
+sed -i '/^\/dev\/sdb/d' /etc/fstab
 
 log 'updating'
-apt update
+pacman -Syu --noconfirm
 
-log 'upgrading'
-apt upgrade -y
+log 'installing docker'
+pacman -S --noconfirm docker
+systemctl enable docker
 
-log 'installing deps'
-apt install -y python3-pip python3-dev build-essential git vim-nox
+echo <<EOF > /etc/systemd/system/wireguard-container@.service
+[Unit]
+Description=Wireguard container for %I
+After=docker.service
+Requires=docker.service
 
-log 'installing ansible'
-pip3 install ansible
+[Service]
+TimeoutStartSec=0
+ExecStartPre=-/usr/bin/docker kill "wireguard-%I"
+ExecStartPre=-/usr/bin/docker rm "wireguard-%I"
+ExecStartPre=/usr/bin/docker pull "$DOCKER_IMAGE"
+ExecStart=/usr/bin/docker run --name "wireguard-%I" -e "USER=%I" --mount "source=config-%I,target=/opt/config" "$DOCKER_IMAGE"
 
-log 'cloning repo'
-git clone "$DEPLOY_REPO" /opt/deploy
+[Install]
+WantedBy=multi-user.target
+EOF
 
-log 'writing user config'
-echo "users:" > /opt/deploy/users.cfg
+log 'creating user container services'
 for user in $(echo "$USERS" | sed 's/,/ /g'); do
-    echo "- $user" >> /opt/deploy/users.cfg
+    systemctl enable "wireguard-container@${user}.service"
 done
 
-for playbook in linode/setup.yml main.yml ; do
-    log "running $playbook"
-    ansible-playbook \
-        --inventory localhost, \
-        --connection local \
-        --extra-vars=user_config_file=/opt/deploy/users.cfg \
-        --extra-vars=ansible_python_interpreter=/usr/bin/python3 \
-        "/opt/deploy/$playbook"
-done
-
-log 'completed'
+log 'disabling sshd'
+# TODO: disable sshd
+# systemctl disable sshd
